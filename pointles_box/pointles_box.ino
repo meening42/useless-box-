@@ -7,7 +7,8 @@
  http://www.arduino.cc/en/Tutorial/Sweep
 */
 
-#include <Servo.h>
+#include <Servo.h>  // used if 
+//#include <VarSpeedServo.h>
 
 // --------CONSTANTS (won't change)---------------
 // PINS
@@ -33,15 +34,26 @@ Servo servoDoor;
 int pot1, pot2; 
 int pos1,pos2;    // variable to store the servo position
 
+int speedServo1, speedServo2;
+
+
 const long intervalLed = 1000;
 const long intervalPrintStatus= 1000;
+
 unsigned long previousMillis = 0; 
 unsigned long currentMillis;
 unsigned long dellayDoorMills;
-unsigned long doorDellayInterval = 400;
+unsigned long doorDellayInterval = 300;
 unsigned long dellayWaitPosMills;
-unsigned long waitPosDellayInterval = 500;
+unsigned long waitPosDellayInterval = 250;
+unsigned long lastRobotPressedBtnTime = 0;
+unsigned long dellayBackDriving = 100;
 
+
+enum eBtnState{
+  BTN_ON =0,
+  BTN_OFF =1
+};
 
 int ledState = LOW;  
 bool btn_state[5];
@@ -49,10 +61,10 @@ int nextBtnToPress=0;
 int prevBtnToPress=0;
 bool waitPointReached;
 
-int servo1_pos[5] = {17,41,71,99,130};
-int servo2_pos[5] = {61,61,61,61,61};
-int servo2_wait_pos = 75;
-int servo2_down_pos = 136;
+int servo1_pos[5] = {17,41,71,99,135};
+int servo2_pos[5] = {80,80,80,85,80};
+int servo2_wait_pos = 95;
+int servo2_down_pos = 155;
 
 int s1Pos;
 int s2Pos;
@@ -64,7 +76,6 @@ AUTO
 working_mode mode = AUTO;
 
 //------------     FUNCTIONS      ---------------------
-void printStatus(void);
 void myPinMode(void);
 void blinkInternalLed(void);
 void updateBtn(void);
@@ -113,9 +124,9 @@ void loop()
 
 
 
-  if (nextBtnToPress != prevBtnToPress and nextBtnToPress > 0)
+  if (nextBtnToPress != prevBtnToPress and nextBtnToPress > 0 and prevBtnToPress >0)
   { 
-    dellayWaitPosMills  = currentMillis + waitPosDellayInterval;
+    dellayWaitPosMills  = currentMillis +55*abs(prevBtnToPress-nextBtnToPress)+75;  //+waitPosDellayInterval
   }
   if (nextBtnToPress >0 and dellayWaitPosMills > currentMillis)
   {
@@ -138,8 +149,11 @@ void loop()
 
   servo1.write(s1Pos);
   servo2.write(s2Pos);
-  
-  prevBtnToPress = nextBtnToPress;
+
+  if (nextBtnToPress >0)
+  {
+    prevBtnToPress = nextBtnToPress;
+  }
   previousMillis = currentMillis;
 }
 
@@ -151,11 +165,8 @@ void loop()
 
 void doorLogic()
 { 
-  if (prevBtnToPress >0 and nextBtnToPress == 0)
-  {
-    dellayDoorMills = currentMillis + doorDellayInterval;
-  }
-  if (currentMillis > dellayDoorMills and nextBtnToPress ==0)
+
+  if (currentMillis > lastRobotPressedBtnTime+doorDellayInterval and nextBtnToPress ==0)
   {
     closeDoor();
   }
@@ -188,11 +199,9 @@ void manual_mode(){
 
 
 void blinkInternalLed(){
-
    if (currentMillis - previousMillis >= intervalLed) 
    {
     // save the last time 
-    printStatus();
       if (ledState  == LOW) {
       ledState = HIGH;
     } else {
@@ -202,29 +211,6 @@ void blinkInternalLed(){
    }
 }
 
-void printStatus()
-{
-      Serial.print("pot1 =");
-  Serial.println(pot1);
-  Serial.print("pot2 =");
-  Serial.println(pot2);
-  Serial.print("pos1 =");
-  Serial.println(pos1);
-  Serial.print("pos2 =");
-  Serial.println(pos2);
-  Serial.print(btn_state[0]);
-  Serial.print(btn_state[1]);
-  Serial.print(btn_state[2]);
-  Serial.print(btn_state[3]);
-  Serial.print(btn_state[4]);      
-
-  Serial.print("\nnext btn to press");
-  Serial.println(nextBtnToPress);
-  Serial.println();
-  Serial.println();
-  
-}
-
 void updateBtn()
 {
   btn_state[0] = digitalRead(BTN0);
@@ -232,12 +218,13 @@ void updateBtn()
   btn_state[2] = digitalRead(BTN2);
   btn_state[3] = digitalRead(BTN3);
   btn_state[4] = digitalRead(BTN4);
-
+  
   for(int i = 0;i<5; i++)
   {
-    if(btn_state[i]==1 and nextBtnToPress == i+1)
+    if(btn_state[i]== BTN_OFF and nextBtnToPress == i+1)
     {
       nextBtnToPress = 0;
+      lastRobotPressedBtnTime = millis();
     }
   }
   
@@ -245,14 +232,13 @@ void updateBtn()
   {
     for(int i = 0;i<5;i++)
     {
-     if(btn_state[i] == 0)
+     if(btn_state[i] == BTN_ON and lastRobotPressedBtnTime + dellayBackDriving < millis())
      {
         nextBtnToPress = i+1;
         break;
      }
     }
   }
- 
 }
 
 void openDoor()
@@ -269,15 +255,18 @@ void ifTurnedOff()
 {
   while (digitalRead(BTN_ON_OFF)==HIGH)
   {
+    Serial.print("Turned OFF");
     analogWrite(LED_PIN, 0);
-    servo1.write(80);
-    servo2.write(138);
+    //servo1.write(17);
+    servo2.write(160);
     updateBtn();
-    printStatus();
     closeDoor();
-    delay(1000);
+    //delay(1000);
   }
 }
+
+
+
 
 
 
